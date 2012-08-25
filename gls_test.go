@@ -130,11 +130,11 @@ func TestGetTable(t *testing.T) {
 		t.Errorf("Error from getTables: %v", err.Error())
 	}
 	expected := []string{"domains"}
-	
+
 	if len(expected) != len(tables) {
 		t.Fatalf("getTables length mismatch, expected: %i, got: %i", len(expected), len(tables))
 	}
-	
+
 	for i, c := range expected {
 		if tables[i] != c {
 			t.Errorf("getTables expected index %i: %s, got: %s", i, c, tables[i])
@@ -146,19 +146,19 @@ var typetests = []struct {
 	in  string
 	out reflect.Type
 }{
-	{"character",					reflect.TypeOf(new(string))},
+	{"character", reflect.TypeOf(new(string))},
 	{"character varying", reflect.TypeOf(new(string))},
-	{"text",							reflect.TypeOf(new(string))},
-	{"smallint",					reflect.TypeOf(new(int64))},
-	{"integer",						reflect.TypeOf(new(int64))},
-	{"bigint",						reflect.TypeOf(new(int64))},
-	{"serial",						reflect.TypeOf(new(int64))},
-	{"bigserial",					reflect.TypeOf(new(int64))},
-	{"boolean",						reflect.TypeOf(new(bool))},
-	{"time",							reflect.TypeOf(new(time.Time))},
-	{"timetz",						reflect.TypeOf(new(time.Time))},
-	{"timestamp",					reflect.TypeOf(new(time.Time))},
-	{"timestamptz",				reflect.TypeOf(new(time.Time))},
+	{"text", reflect.TypeOf(new(string))},
+	{"smallint", reflect.TypeOf(new(int64))},
+	{"integer", reflect.TypeOf(new(int64))},
+	{"bigint", reflect.TypeOf(new(int64))},
+	{"serial", reflect.TypeOf(new(int64))},
+	{"bigserial", reflect.TypeOf(new(int64))},
+	{"boolean", reflect.TypeOf(new(bool))},
+	{"time", reflect.TypeOf(new(time.Time))},
+	{"timetz", reflect.TypeOf(new(time.Time))},
+	{"timestamp", reflect.TypeOf(new(time.Time))},
+	{"timestamptz", reflect.TypeOf(new(time.Time))},
 }
 
 func TestGetType(t *testing.T) {
@@ -170,7 +170,7 @@ func TestGetType(t *testing.T) {
 }
 
 var columntypetests = []struct {
-	name string
+	name     string
 	datatype reflect.Type
 }{
 	{"name", reflect.TypeOf(new(string))},

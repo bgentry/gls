@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 	_ "github.com/bmizerany/pq"
-	"io"
 	"gls/logger"
+	"io"
 	"reflect"
 	"strings"
 	"time"
@@ -21,13 +21,13 @@ func OpenDB(connString string) (dbRef *sql.DB, err error) {
 
 type pgTable struct {
 	parent *LockstepServer
-	name string
-	types map[string]reflect.Type
+	name   string
+	types  map[string]reflect.Type
 	loaded bool
 }
 
 type LockstepServer struct {
-	db *sql.DB
+	db     *sql.DB
 	tables map[string]*pgTable
 }
 
