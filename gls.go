@@ -190,7 +190,7 @@ func getType(pgtype string) reflect.Type {
 	case "boolean":
 		return reflect.TypeOf(new(bool))
 	// don't know how to deal w/ time..
-	case "time", "timetz", "timestamp", "timestamptz":
+	case "time without time zone", "time with time zone", "timestamp without time zone", "timestamp with time zone":
 		return reflect.TypeOf(&time.Time{})
 	default:
 		fmt.Printf("Unknown type: %s\n", pgtype)

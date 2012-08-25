@@ -155,10 +155,10 @@ var typetests = []struct {
 	{"serial", reflect.TypeOf(new(int64))},
 	{"bigserial", reflect.TypeOf(new(int64))},
 	{"boolean", reflect.TypeOf(new(bool))},
-	{"time", reflect.TypeOf(new(time.Time))},
-	{"timetz", reflect.TypeOf(new(time.Time))},
-	{"timestamp", reflect.TypeOf(new(time.Time))},
-	{"timestamptz", reflect.TypeOf(new(time.Time))},
+	{"time without time zone", reflect.TypeOf(new(time.Time))},
+	{"time with time zone", reflect.TypeOf(new(time.Time))},
+	{"timestamp without time zone", reflect.TypeOf(new(time.Time))},
+	{"timestamp with time zone", reflect.TypeOf(new(time.Time))},
 }
 
 func TestGetType(t *testing.T) {
