@@ -8,7 +8,6 @@ import (
 	"io"
 	"reflect"
 	"strings"
-	"time"
 )
 
 func OpenDB(connString string) (dbRef *sql.DB, err error) {
@@ -97,23 +96,12 @@ func (l *LockstepServer) Query(tableName string, finished chan bool) (chan map[s
 				return
 			}
 			for i, name := range cols {
-				switch fargs[i].(type) {
-				case **int64:
-					res[name] = **(reflect.ValueOf(fargs[i]).Interface().(**int64))
-				case **string:
-					res[name] = **(reflect.ValueOf(fargs[i]).Interface().(**string))
-				case **bool:
-					res[name] = **(reflect.ValueOf(fargs[i]).Interface().(**bool))
-				}
+				res[name] = underlyingValue(fargs[i])
 			}
 			c <- res //name
 		}
 	}(t, c)
 	return c, nil
-}
-
-func newValueFor(k reflect.Type) interface{} {
-	return reflect.New(k).Interface()
 }
 
 func (l *LockstepServer) loadTables() error {
@@ -179,23 +167,6 @@ func describeTable(db *sql.DB, name string) (map[string]reflect.Type, error) {
 	}
 
 	return types, nil
-}
-
-func getType(pgtype string) reflect.Type {
-	switch pgtype {
-	case "character", "character varying", "text":
-		return reflect.TypeOf(new(string))
-	case "smallint", "integer", "bigint", "serial", "bigserial":
-		return reflect.TypeOf(new(int64))
-	case "boolean":
-		return reflect.TypeOf(new(bool))
-	// don't know how to deal w/ time..
-	case "time without time zone", "time with time zone", "timestamp without time zone", "timestamp with time zone":
-		return reflect.TypeOf(&time.Time{})
-	default:
-		fmt.Printf("Unknown type: %s\n", pgtype)
-	}
-	return reflect.TypeOf(new(string))
 }
 
 func startLockstepQuery(db *sql.DB, tableName string) (*sql.Rows, error) {
