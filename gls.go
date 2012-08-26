@@ -8,6 +8,7 @@ import (
 	"io"
 	"reflect"
 	"strings"
+	"sync"
 )
 
 func OpenDB(connString string) (dbRef *sql.DB, err error) {
@@ -23,11 +24,14 @@ type pgTable struct {
 	name   string
 	types  map[string]reflect.Type
 	loaded bool
+	mu     sync.Mutex  // Protects types + loaded
 }
 
 type LockstepServer struct {
 	db     *sql.DB
 	tables map[string]*pgTable
+	loaded bool
+	mu     sync.Mutex  // Protects tables + loaded
 }
 
 func (l *LockstepServer) Stream(w io.Writer, tableName string) error {
@@ -47,6 +51,13 @@ func (l *LockstepServer) Stream(w io.Writer, tableName string) error {
 }
 
 func (l *LockstepServer) Query(tableName string, finished chan bool) (chan map[string]interface{}, error) {
+	if !l.loaded {
+		// Table/view names are not loaded yet
+		err := l.loadTables()
+		if err != nil {
+			return nil, err
+		}
+	}
 	if l.tables[tableName] == nil {
 		return nil, fmt.Errorf("invalid tableName: %q", tableName)
 	}
@@ -105,6 +116,12 @@ func (l *LockstepServer) Query(tableName string, finished chan bool) (chan map[s
 }
 
 func (l *LockstepServer) loadTables() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.loaded {
+		return nil
+	}
+
 	l.tables = make(map[string]*pgTable)
 
 	names, err := getTables(l.db)
@@ -114,16 +131,12 @@ func (l *LockstepServer) loadTables() error {
 	for _, name := range names {
 		l.tables[name] = &pgTable{parent: l, name: name}
 	}
-	for _, t := range l.tables {
-		err = t.loadSchema()
-		if err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
 func (t *pgTable) loadSchema() error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	r, err := describeTable(t.parent.db, t.name)
 	if err != nil {
 		return err

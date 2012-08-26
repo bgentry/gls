@@ -221,7 +221,6 @@ func TestStream(t *testing.T) {
 	defer teardownAndCloseDB(t, db)
 
 	l := LockstepServer{db: db}
-	l.loadTables()
 
 	w := testStringWriter{t, []string{"a.com", "b.com", "c.com"}, 0}
 	err := l.Stream(&w, "domains")
@@ -236,7 +235,6 @@ func TestStreamAfterDroppingColumn(t *testing.T) {
 	defer teardownAndCloseDB(t, db)
 
 	l := LockstepServer{db: db}
-	l.loadTables()
 
 	w := testStringWriter{t, []string{"a.com", "b.com", "c.com"}, 0}
 	err := l.Stream(&w, "domains")
