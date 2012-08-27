@@ -23,10 +23,14 @@ func openTestDB(t *testing.T) *sql.DB {
 
 var testSchema = `
 CREATE TABLE domains (
-    name text,
-    deleted boolean,
-    txid bigint DEFAULT txid_current()
+  name text,
+  deleted boolean,
+	created_at timestamptz,
+  txid bigint DEFAULT txid_current()
 );`
+var testView = `
+CREATE OR REPLACE VIEW domains_lockstep AS SELECT txid_snapshot_xmin(txid_current_snapshot()) AS current_xmin, name, deleted, txid FROM domains
+`
 var testData = `INSERT into domains ( name, deleted, txid ) VALUES
  ('a.com', 'f', 0),
  ('b.com', 'f', 1),
@@ -44,6 +48,10 @@ func loadTestData(db *sql.DB) (err error) {
 	if err != nil {
 		return
 	}
+	_, err = tx.Exec(testView)
+	if err != nil {
+		return
+	}
 	_, err = tx.Exec(testData)
 	if err != nil {
 		return
@@ -52,7 +60,7 @@ func loadTestData(db *sql.DB) (err error) {
 }
 
 func teardownTestDB(db *sql.DB) error {
-	_, err := db.Exec("DROP TABLE domains")
+	_, err := db.Exec("DROP TABLE domains CASCADE")
 	return err
 }
 
@@ -129,7 +137,7 @@ func TestGetTable(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error from getTables: %v", err.Error())
 	}
-	expected := []string{"domains"}
+	expected := []string{"domains", "domains_lockstep"}
 
 	if len(expected) != len(tables) {
 		t.Fatalf("getTables length mismatch, expected: %i, got: %i", len(expected), len(tables))
@@ -169,14 +177,13 @@ func TestGetType(t *testing.T) {
 	}
 }
 
-var columntypetests = []struct {
+var domainscolumns = []struct {
 	name     string
 	datatype reflect.Type
 }{
 	{"name", reflect.TypeOf(new(string))},
 	{"txid", reflect.TypeOf(new(int64))},
 	{"deleted", reflect.TypeOf(new(bool))},
-	{"character_octet_length", reflect.TypeOf(new(int64))},
 }
 
 func TestDescribeTable(t *testing.T) {
@@ -189,7 +196,7 @@ func TestDescribeTable(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Error from describeTable: %v", err.Error())
 		}
-		for i, tt := range columntypetests {
+		for i, tt := range domainscolumns {
 			if data[tt.name] != tt.datatype {
 				t.Errorf("%d. describeTable(db, %q)[%q] => %q, want %q", i, table, tt.name, data[tt.name], tt.datatype)
 			}
@@ -203,16 +210,20 @@ func TestLoadTables(t *testing.T) {
 
 	l := LockstepServer{db: db}
 	l.loadTables()
-	if len(l.tables) != 1 {
-		t.Fatalf("loadTables(), len(l.tables) => %d, want 1", len(l.tables))
+	if len(l.tables) != 2 {
+		t.Fatalf("loadTables(), len(l.tables) => %d, want 2", len(l.tables))
 	}
-	expected := []string{"domains"}
-	i := 0
+	expected := []string{"domains", "domains_lockstep"}
 	for name, _ := range l.tables {
-		if expected[i] != name {
-			t.Errorf("loadTables()[%d] => %q, want %q", i, name, expected[i])
+		success := false
+		for _, n2 := range expected {
+			if name == n2 {
+				success = true
+			}
 		}
-		i++
+		if !success {
+			t.Errorf("loadTables() => %q, not included in list", name)
+		}
 	}
 }
 
@@ -223,7 +234,7 @@ func TestStream(t *testing.T) {
 	l := LockstepServer{db: db}
 
 	w := testStringWriter{t, []string{"a.com", "b.com", "c.com"}, 0}
-	err := l.Stream(&w, "domains")
+	err := l.Stream(&w, "domains_lockstep")
 	if err != nil {
 		t.Fatalf("Error from LockstepStream: %v", err.Error())
 	}
@@ -243,7 +254,7 @@ func TestStreamAfterDroppingColumn(t *testing.T) {
 	}
 	w.failUnlessN(3)
 
-	_, err = db.Exec("ALTER TABLE domains DROP COLUMN deleted")
+	_, err = db.Exec("ALTER TABLE domains DROP COLUMN created_at")
 	if err != nil {
 		t.Fatalf("Error dropping column: %v", err.Error())
 	}

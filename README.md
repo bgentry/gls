@@ -18,7 +18,7 @@ Chunked HTTP
     ```json
     {
      "txid": 549163,
-     "current": 551033,
+     "current_xmin": 551033,
      "since": 549163,
      "deleted": true,
      "data": {
@@ -31,7 +31,7 @@ Chunked HTTP
 Fields:
 
 * `txid`: transaction at which the record was last updated (required)
-* `current`: `txid_snapshot_xmin(txid_snapshot_current())` (required)
+* `current_xmin`: `txid_snapshot_xmin(txid_snapshot_current())` (required)
 * `since`: min of `txid_snapshot_xmin(txid_current_snapshot())` and `txid` (required)
 * `deleted`: whether or not the row is marked as deleted
 * `data`: any data fields in the row not part of the lockstep protocol

@@ -7,6 +7,7 @@ import (
 	"gls/logger"
 	"io"
 	"reflect"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -90,10 +91,11 @@ func (l *LockstepServer) Query(tableName string, finished chan bool) (chan map[s
 		var fargs []interface{}
 
 		for _, name := range cols {
-			if name == "txid_snapshot_xmin" {
+			if name == "current_xmin" {
 				res[name] = new(int64)
 				fargs = append(fargs, res[name])
 			} else {
+				// TODO: need to make sure that the column is defined in the types map
 				res[name] = newValueFor(t.types[name])
 				fargs = append(fargs, res[name])
 			}
@@ -147,17 +149,18 @@ func (t *pgTable) loadSchema() error {
 
 func getTables(db *sql.DB) ([]string, error) {
 	var tables []string
-	var table string
 	rows, err := db.Query("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'")
 	if err != nil {
 		return nil, err
 	}
 
+	var table string
 	for rows.Next() {
 		rows.Scan(&table)
 		tables = append(tables, table)
 	}
 
+	sort.Strings(tables)
 	return tables, nil
 }
 
@@ -182,10 +185,6 @@ func describeTable(db *sql.DB, name string) (map[string]reflect.Type, error) {
 	return types, nil
 }
 
-func startLockstepQuery(db *sql.DB, tableName string) (*sql.Rows, error) {
-	return db.Query(fmt.Sprintf("SELECT txid_snapshot_xmin(txid_current_snapshot()), * FROM %s", tableName))
-}
-
 func (t *pgTable) startLockstepQuery() (*sql.Rows, error) {
-	return t.parent.db.Query(fmt.Sprintf("SELECT txid_snapshot_xmin(txid_current_snapshot()), * FROM %s", t.name))
+	return t.parent.db.Query(fmt.Sprintf("SELECT * FROM %s", t.name))
 }
