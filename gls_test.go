@@ -31,10 +31,10 @@ CREATE TABLE domains (
 var testView = `
 CREATE OR REPLACE VIEW domains_lockstep AS SELECT txid_snapshot_xmin(txid_current_snapshot()) AS current_xmin, name, deleted, txid FROM domains
 `
-var testData = `INSERT into domains ( name, deleted, txid ) VALUES
- ('a.com', 'f', 0),
- ('b.com', 'f', 1),
- ('c.com', 'f', 2);
+var testData = `INSERT into domains ( name, deleted, txid, created_at ) VALUES
+ ('a.com', 'f', 0, '2012-08-27 15:04:23-07'),
+ ('b.com', 'f', 1, NULL),
+ ('c.com', 'f', 2, NULL);
 `
 
 func loadTestData(db *sql.DB) (err error) {
