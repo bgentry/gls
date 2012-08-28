@@ -71,50 +71,48 @@ func (l *LockstepServer) Query(tableName string, finished chan bool) (chan map[s
 		}
 	}
 
-	c := make(chan map[string]interface{})
-	go func(t *pgTable, c chan map[string]interface{}) {
-		defer close(c)
-		rows, err := t.startLockstepQuery()
+	rc := make(chan map[string]interface{})
+	go l.query(t, rc)
+
+	return rc, nil
+}
+
+func (l *LockstepServer) query(t *pgTable, c chan map[string]interface{}) {
+	defer close(c)
+	rows, err := t.startLockstepQuery()
+	if err != nil {
+		// no good way to send this error back?
+		fmt.Printf("Error in startLockstepQuery: %v\n", err)
+		return
+	}
+
+	// Figure out columns in response
+	cols, _ := rows.Columns()
+	for i, _ := range cols {
+		cols[i] = strings.ToLower(cols[i])
+	}
+
+	res := make(map[string]interface{}, len(cols))
+	var fargs []interface{}
+
+	for _, name := range cols {
+		// TODO: need to make sure that the column is defined in the types map
+		res[name] = newValueFor(t.types[name])
+		fargs = append(fargs, res[name])
+	}
+
+	for rows.Next() {
+		err := rows.Scan(fargs...)
 		if err != nil {
 			// no good way to send this error back?
-			fmt.Printf("Error in startLockstepQuery: %v\n", err)
+			fmt.Printf("Error in Scan: %v\n", err)
 			return
 		}
-
-		// Figure out columns
-		cols, _ := rows.Columns()
-		for i, _ := range cols {
-			cols[i] = strings.ToLower(cols[i])
+		for i, name := range cols {
+			res[name] = underlyingValue(fargs[i])
 		}
-
-		res := make(map[string]interface{}, len(cols))
-		var fargs []interface{}
-
-		for _, name := range cols {
-			if name == "current_xmin" {
-				res[name] = new(int64)
-				fargs = append(fargs, res[name])
-			} else {
-				// TODO: need to make sure that the column is defined in the types map
-				res[name] = newValueFor(t.types[name])
-				fargs = append(fargs, res[name])
-			}
-		}
-
-		for rows.Next() {
-			err := rows.Scan(fargs...)
-			if err != nil {
-				// no good way to send this error back?
-				fmt.Printf("Error in Scan: %v\n", err)
-				return
-			}
-			for i, name := range cols {
-				res[name] = underlyingValue(fargs[i])
-			}
-			c <- res //name
-		}
-	}(t, c)
-	return c, nil
+		c <- res
+	}
 }
 
 func (l *LockstepServer) loadTables() error {
