@@ -27,7 +27,7 @@ type pgTable struct {
 	mu     sync.Mutex  // Protects types + loaded
 }
 
-func (l *LockstepServer) Query(tableName string, finished chan bool) (chan map[string]interface{}, error) {
+func (l *LockstepServer) Query(tableName string, stopc chan bool) (chan map[string]interface{}, error) {
 	if !l.loaded {
 		// Table/view names are not loaded yet
 		err := l.loadTables()
@@ -39,28 +39,32 @@ func (l *LockstepServer) Query(tableName string, finished chan bool) (chan map[s
 		return nil, fmt.Errorf("invalid tableName: %q", tableName)
 	}
 	t := l.tables[tableName]
-	if !t.loaded {
-		// Table schema is not loaded, we need it before we can query
-		err := t.loadSchema()
-		if err != nil {
-			return nil, err
-		}
-	}
 
-	rc := make(chan map[string]interface{})
-	go l.query(t, rc)
+	rc := make(chan map[string]interface{}, 10)
+	go t.lockstepQuery(rc, stopc)
 
 	return rc, nil
 }
 
-func (l *LockstepServer) query(t *pgTable, c chan map[string]interface{}) {
-	defer close(c)
+func (t *pgTable) lockstepQuery(rc chan map[string]interface{}, stopc chan bool) {
+	defer close(rc)
+
+	if !t.loaded {
+		// Table schema is not loaded, we need it before we can query
+		err := t.loadSchema()
+		if err != nil {
+			// no good way to send this error back?
+			return
+		}
+	}
+
 	rows, err := t.parent.db.Query(fmt.Sprintf("SELECT * FROM %s", t.name))
 	if err != nil {
 		// no good way to send this error back?
 		fmt.Printf("Error starting lockstep query: %v\n", err)
 		return
 	}
+	defer rows.Close()
 
 	// Figure out columns in response
 	cols, _ := rows.Columns()
@@ -87,7 +91,13 @@ func (l *LockstepServer) query(t *pgTable, c chan map[string]interface{}) {
 		for i, name := range cols {
 			res[name] = underlyingValue(fargs[i])
 		}
-		c <- res
+		// If we've received a stop request, stop running
+		select {
+		case <-stopc:
+			return
+		default:
+			rc <- res
+		}
 	}
 }
 

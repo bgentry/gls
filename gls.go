@@ -15,15 +15,15 @@ type LockstepServer struct {
 }
 
 func (l *LockstepServer) Stream(w io.Writer, tableName string) error {
-	finished := make(chan bool)
-	c, err := l.Query(tableName, finished)
+	stopc := make(chan bool)
+	c, err := l.Query(tableName, stopc)
 	if err != nil {
 		return err
 	}
 	for s := range c {
 		_, err = w.Write([]byte(s["name"].(string)))
 		if err != nil {
-			finished <- true
+			stopc <- true
 			return err
 		}
 	}

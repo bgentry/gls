@@ -60,6 +60,11 @@ func loadTestData(db *sql.DB) (err error) {
 
 func teardownTestDB(db *sql.DB) error {
 	_, err := db.Exec("DROP TABLE domains CASCADE")
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Exec("DROP VIEW IF EXISTS generated_series CASCADE")
 	return err
 }
 
@@ -179,3 +184,40 @@ func TestLoadTables(t *testing.T) {
 	}
 }
 
+var sqlCreateGeneratedView = `
+CREATE OR REPLACE VIEW generated_series AS
+  SELECT * FROM generate_series(0, 10) AS id;
+`
+
+func TestLockstepQueryStop(t *testing.T) {
+	db := handleTestDBPrep(t)
+	defer teardownAndCloseDB(t, db)
+	_, err := db.Exec(sqlCreateGeneratedView)
+	if err != nil {
+		t.Fatalf("Error creating generated view: %v", err)
+	}
+
+	l := LockstepServer{db: db}
+	l.loadTables()
+
+	rc := make(chan map[string]interface{})
+	stopc := make(chan bool)
+
+	go l.tables["generated_series"].lockstepQuery(rc, stopc)
+	stopc <- true
+	defer close(stopc)
+
+	count := 0
+	for {
+		select {
+		case <-rc:
+			count++
+			if count > 1 {
+				t.Errorf("Received too many results, query did not close")
+				return
+			}
+		default:
+			return
+		}
+	}
+}
