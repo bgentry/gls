@@ -202,10 +202,11 @@ func TestLockstepQueryStop(t *testing.T) {
 
 	rc := make(chan map[string]interface{})
 	stopc := make(chan bool)
-
-	go l.tables["generated_series"].lockstepQuery(rc, stopc)
-	stopc <- true
 	defer close(stopc)
+	errc := make(chan error)
+
+	go l.tables["generated_series"].lockstepQuery(rc, stopc, errc)
+	stopc <- true
 
 	count := 0
 	for {

@@ -27,27 +27,29 @@ type pgTable struct {
 	mu     sync.Mutex // Protects types + loaded
 }
 
-func (l *LockstepServer) Query(tableName string, stopc chan bool) (chan map[string]interface{}, error) {
+func (l *LockstepServer) Query(tableName string, stopc chan bool) (rc chan map[string]interface{}, errc chan error, err error) {
 	if !l.loaded {
 		// Table/view names are not loaded yet
-		err := l.loadTables()
+		err = l.loadTables()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	if l.tables[tableName] == nil {
-		return nil, fmt.Errorf("invalid tableName: %q", tableName)
+		return nil, nil, fmt.Errorf("invalid tableName: %q", tableName)
 	}
 	t := l.tables[tableName]
 
-	rc := make(chan map[string]interface{}, 10)
-	go t.lockstepQuery(rc, stopc)
+	rc = make(chan map[string]interface{}, 10)
+	errc = make(chan error)
 
-	return rc, nil
+	go t.lockstepQuery(rc, stopc, errc)
+	return rc, errc, nil
 }
 
-func (t *pgTable) lockstepQuery(rc chan map[string]interface{}, stopc chan bool) {
+func (t *pgTable) lockstepQuery(rc chan map[string]interface{}, stopc chan bool, errc chan error) {
 	defer close(rc)
+	defer close(errc)
 
 	if !t.loaded {
 		// Table schema is not loaded, we need it before we can query

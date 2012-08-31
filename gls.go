@@ -16,7 +16,10 @@ type LockstepServer struct {
 
 func (l *LockstepServer) Stream(w io.Writer, tableName string) error {
 	stopc := make(chan bool)
-	c, err := l.Query(tableName, stopc)
+	defer close(stopc)
+
+	// ignore errc for now
+	c, _, err := l.Query(tableName, stopc)
 	if err != nil {
 		return err
 	}
