@@ -19,11 +19,11 @@ func (l *LockstepServer) Stream(w io.Writer, tableName string) error {
 	defer close(stopc)
 
 	// ignore errc for now
-	c, _, err := l.Query(tableName, stopc)
+	rs, err := l.Query(tableName, stopc)
 	if err != nil {
 		return err
 	}
-	for s := range c {
+	for s := range rs.Results {
 		_, err = w.Write([]byte(s["name"].(string)))
 		if err != nil {
 			stopc <- true

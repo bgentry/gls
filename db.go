@@ -27,29 +27,38 @@ type pgTable struct {
 	mu     sync.Mutex // Protects types + loaded
 }
 
-func (l *LockstepServer) Query(tableName string, stopc chan bool) (rc chan map[string]interface{}, errc chan error, err error) {
+type ResultSet struct {
+	Results chan map[string]interface{}
+	Errors chan error
+}
+
+func (rs *ResultSet) Close() {
+	close(rs.Results)
+	close(rs.Errors)
+}
+
+// Query returns a channel of results, a channel an errors
+func (l *LockstepServer) Query(tableName string, stopc chan bool) (rs *ResultSet, err error) {
 	if !l.loaded {
 		// Table/view names are not loaded yet
 		err = l.loadTables()
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 	if l.tables[tableName] == nil {
-		return nil, nil, fmt.Errorf("invalid tableName: %q", tableName)
+		return nil, fmt.Errorf("invalid tableName: %q", tableName)
 	}
 	t := l.tables[tableName]
 
-	rc = make(chan map[string]interface{}, 10)
-	errc = make(chan error)
+	rs = &ResultSet{make(chan map[string]interface{}), make(chan error, 10)}
 
-	go t.lockstepQuery(rc, stopc, errc)
-	return rc, errc, nil
+	go t.lockstepQuery(rs, stopc)
+	return rs, nil
 }
 
-func (t *pgTable) lockstepQuery(rc chan map[string]interface{}, stopc chan bool, errc chan error) {
-	defer close(rc)
-	defer close(errc)
+func (t *pgTable) lockstepQuery(rs *ResultSet, stopc chan bool) {
+	defer rs.Close()
 
 	if !t.loaded {
 		// Table schema is not loaded, we need it before we can query
@@ -98,7 +107,7 @@ func (t *pgTable) lockstepQuery(rc chan map[string]interface{}, stopc chan bool,
 		case <-stopc:
 			return
 		default:
-			rc <- res
+			rs.Results <- res
 		}
 	}
 }

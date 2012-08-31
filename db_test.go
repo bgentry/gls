@@ -200,18 +200,17 @@ func TestLockstepQueryStop(t *testing.T) {
 	l := LockstepServer{db: db}
 	l.loadTables()
 
-	rc := make(chan map[string]interface{})
+	rs := &ResultSet{make(chan map[string]interface{}), make(chan error)}
 	stopc := make(chan bool)
 	defer close(stopc)
-	errc := make(chan error)
 
-	go l.tables["generated_series"].lockstepQuery(rc, stopc, errc)
+	go l.tables["generated_series"].lockstepQuery(rs, stopc)
 	stopc <- true
 
 	count := 0
 	for {
 		select {
-		case <-rc:
+		case <-rs.Results:
 			count++
 			if count > 1 {
 				t.Errorf("Received too many results, query did not close")
