@@ -11,7 +11,7 @@ type LockstepServer struct {
 	db     *sql.DB
 	tables map[string]*pgTable
 	loaded bool
-	mu     sync.Mutex  // Protects tables + loaded
+	mu     sync.Mutex // Protects tables + loaded
 }
 
 func (l *LockstepServer) Stream(w io.Writer, tableName string) error {

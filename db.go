@@ -24,7 +24,7 @@ type pgTable struct {
 	name   string
 	types  map[string]reflect.Type
 	loaded bool
-	mu     sync.Mutex  // Protects types + loaded
+	mu     sync.Mutex // Protects types + loaded
 }
 
 func (l *LockstepServer) Query(tableName string, stopc chan bool) (chan map[string]interface{}, error) {
