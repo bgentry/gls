@@ -5,6 +5,8 @@ import (
 	"github.com/bmizerany/pq"
 	"reflect"
 	"testing"
+	"time"
+	"strings"
 )
 
 func openTestDB(t *testing.T) *sql.DB {
@@ -35,6 +37,7 @@ var sqlLoadData = `INSERT into domains ( name, deleted, txid, created_at ) VALUE
  ('b.com', 'f', 1, NULL),
  ('c.com', 'f', 2, NULL);
 `
+var sqlDropGeneratedView = `DROP VIEW IF EXISTS generated_series CASCADE`
 
 func loadTestData(db *sql.DB) (err error) {
 	tx, err := db.Begin()
@@ -64,7 +67,7 @@ func teardownTestDB(db *sql.DB) error {
 		return err
 	}
 
-	_, err = db.Exec("DROP VIEW IF EXISTS generated_series CASCADE")
+	_, err = db.Exec(sqlDropGeneratedView)
 	return err
 }
 
@@ -219,5 +222,40 @@ func TestLockstepQueryStop(t *testing.T) {
 		default:
 			return
 		}
+	}
+}
+
+func TestLockstepQueryError(t *testing.T) {
+	db := handleTestDBPrep(t)
+	defer teardownAndCloseDB(t, db)
+	_, err := db.Exec(sqlCreateGeneratedView)
+	if err != nil {
+		t.Fatalf("Error creating generated view: %v", err)
+	}
+
+	l := LockstepServer{db: db}
+	l.loadTables()
+
+	// Drop the view before trying to query it, ensuring an error
+	_, err = db.Exec(sqlDropGeneratedView)
+	if err != nil {
+		t.Fatalf("Error dropping generated_series view: %v", err)
+	}
+
+	rs := &ResultSet{make(chan map[string]interface{}), make(chan error)}
+	stopc := make(chan bool)
+	defer close(stopc)
+
+	go l.tables["generated_series"].lockstepQuery(rs, stopc)
+
+	select {
+	case e := <-rs.Errors:
+		if !strings.Contains(e.Error(), "does not exist") {
+			t.Errorf("lockstepQuery returned an unexpected error: %v", e)
+		}
+	case r := <-rs.Results:
+		t.Errorf("lockstepQuery() expected an error, returned a result: %v", r)
+	case <-time.After(100e6):
+		t.Errorf("Error expected, none received")
 	}
 }

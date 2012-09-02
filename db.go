@@ -57,6 +57,9 @@ func (l *LockstepServer) Query(tableName string, stopc chan bool) (rs *ResultSet
 	return rs, nil
 }
 
+// lockstepQuery runs the internal query and returns results or errors in rs.
+// It will stop the query and return if it receives anything on stopc. Intended
+// to be run in its own goroutine i.e. `go t.lockstepQuery(rs, stopc)`
 func (t *pgTable) lockstepQuery(rs *ResultSet, stopc chan bool) {
 	defer rs.Close()
 
@@ -64,15 +67,14 @@ func (t *pgTable) lockstepQuery(rs *ResultSet, stopc chan bool) {
 		// Table schema is not loaded, we need it before we can query
 		err := t.loadSchema()
 		if err != nil {
-			// no good way to send this error back?
+			rs.Errors <- err
 			return
 		}
 	}
 
 	rows, err := t.parent.db.Query(fmt.Sprintf("SELECT * FROM %s", t.name))
 	if err != nil {
-		// no good way to send this error back?
-		fmt.Printf("Error starting lockstep query: %v\n", err)
+		rs.Errors <- err
 		return
 	}
 	defer rows.Close()
@@ -87,26 +89,31 @@ func (t *pgTable) lockstepQuery(rs *ResultSet, stopc chan bool) {
 	var fargs []interface{}
 
 	for _, name := range cols {
-		// TODO: need to make sure that the column is defined in the types map
-		res[name] = newValueFor(t.types[name])
+		colType, ok := t.types[name]
+		if !ok {
+			// column is not defined in the type map
+			rs.Errors <- fmt.Errorf("undefined column: %q", name)
+			return
+		}
+		res[name] = newValueFor(colType)
 		fargs = append(fargs, res[name])
 	}
 
 	for rows.Next() {
 		err := rows.Scan(fargs...)
 		if err != nil {
-			// no good way to send this error back?
-			fmt.Printf("Error in Scan: %v\n", err)
+			rs.Errors <- err
 			return
 		}
 		for i, name := range cols {
 			res[name] = underlyingValue(fargs[i])
 		}
-		// If we've received a stop request, stop running
 		select {
 		case <-stopc:
+			// We've received a stop request, stop running
 			return
 		default:
+			// return the result
 			rs.Results <- res
 		}
 	}
